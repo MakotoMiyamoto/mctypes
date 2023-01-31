@@ -1,3 +1,4 @@
+use std::io::Read;
 #[allow(unused_imports)]
 use std::{net::TcpStream, io::{self, BufWriter, BufReader, Write}};
 
@@ -11,21 +12,6 @@ fn main() -> Result<(), io::Error> {
 
     let mut writer = BufWriter::new(stream.try_clone()?);
     let mut reader = BufReader::new(&mut stream);
-
-    // let packet_len = VarInt::from(0);
-    // let packet_id = VarInt::from(0);
-    // writer.write(packet_len.bytes())?;
-    // writer.write(packet_id.bytes())?;
-
-    // let proto_vers = VarInt::from(760); // 1.19.2 protocol version
-    // let host = "localhost".to_owned();
-    // let next_state = VarInt::from(2); // Login state
-    
-    // writer.write(proto_vers.bytes())?;
-    // writer.write(VarInt::from(host.len() as i32).bytes())?;
-    // writer.write(host.as_bytes())?;
-    // writer.write(25565_u16.to_be_bytes().as_slice())?;
-    // writer.write(next_state.bytes())?;
 
     let host = "localhost".to_owned();
 
@@ -43,6 +29,28 @@ fn main() -> Result<(), io::Error> {
 
     println!("{:?}", handshake_out);
 
+    let mut login_start: Vec<u8> = vec![];
+    let username: String = "Makoto".to_owned();
+    login_start.push(0x00); // packet id for login start
+    login_start.extend(VarInt::from(username.len() as i32).bytes());
+    login_start.extend(username.as_bytes());
+    login_start.push(0x00); // Do not send UUID.
+
+    let mut login_start_out: Vec<u8> = vec![];
+    login_start_out.extend(VarInt::from(login_start.len() as i32).bytes());
+    login_start_out.extend(&login_start);
+
+    println!("{:?}", login_start_out);
+
+    writer.write_all(&handshake_out)?;
+    writer.write_all(&login_start_out)?;
+    writer.flush()?;
+
+    let mut header_buf: [u8; 6] = [0; 6];
+    reader.read(&mut header_buf)?;
+    let rx_len = VarInt::from_bytes(&header_buf)?;
+    let rx_id = VarInt::from_bytes(&header_buf[rx_len.len()..])?;
+    println!("{:?} {:?}", rx_len.value(), rx_id.value());
 
     Ok(())
 }
